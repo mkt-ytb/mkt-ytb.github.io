@@ -46,19 +46,6 @@
         ruby rt {
             font-size: 0.5em; /* 親文字に対して小さいサイズ */
         }
-        /* AI画像生成エラー回避のため、ローディングスタイルは不要になりましたが念のため残します */
-        .loading-spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #f59e0b; /* Tailwind: amber-500 */
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4">
@@ -177,8 +164,6 @@
     </div>
 
     <script>
-        // AI画像生成に関する定数を削除しました
-
         // 全問題データ: 15問 (解説付き) - ルビを適用 
         const allQuizData = [
             { q: "「<ruby>猿<rt>さる</rt></ruby>も<ruby>木<rt>き</rt></ruby>から<ruby>落<rt>お</rt></ruby>ちる」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "どんな<ruby>名<rt>めい</rt></ruby><ruby>人<rt>じん</rt></ruby>でも<ruby>失<rt>しっ</rt></ruby><ruby>敗<rt>ぱい</rt></ruby>することがある。", distractors: ["<ruby>猿<rt>さる</rt></ruby>は<ruby>木<rt>き</rt></ruby>から<ruby>落<rt>お</rt></ruby>ちると<ruby>大<rt>おお</rt></ruby><ruby>怪我<rt>けが</rt></ruby>をする。", "<ruby>猿<rt>さる</rt></ruby>は<ruby>木<rt>き</rt></ruby>の<ruby>上<rt>うえ</rt></ruby>で<ruby>生活<rt>せいかつ</rt></ruby>するのが<ruby>苦<rt>にが</rt></ruby>てだ。"], commentary: "<ruby>木<rt>き</rt></ruby>のぼりが<ruby>得<rt>とく</rt></ruby><ruby>意<rt>い</rt></ruby>な<ruby>猿<rt>さる</rt></ruby>でも<ruby>失<rt>しっ</rt></ruby><ruby>敗<rt>ぱい</rt></ruby>するように、どんなに<ruby>優<rt>すぐ</rt></ruby>れた<ruby>人<rt>ひと</rt></ruby>でも<ruby>間<rt>ま</rt></ruby>ち<ruby>が<rt>が</rt></ruby>いを<ruby>犯<rt>おか</rt></ruby>すことがある、という<ruby>意味<rt>いみ</rt></ruby>です。" },
@@ -234,12 +219,13 @@
             { id: 'mat-bowl', initial: { icon: '🥣', text: '器' }, upgraded: { icon: '🍶', text: '高級漆器' } },
         ];
         
-        // --- 画像生成APIを削除し、静的画像URLの定義に置き換え ---
+        // --- GitHub Pagesのルートディレクトリに配置される画像URLに置き換え ---
+        const GITHUB_PAGES_ROOT = "https://mkt-ytb.github.io/"; // ユーザーの指定したベースURL
         const katsudonImages = {
-            supreme: "https://placehold.co/450x250/FFD700/000?text=【10点】至高のカツ丼 (Githubシミュレート)", // 10/10
-            premium: "https://placehold.co/450x250/C0C0C0/000?text=【7-9点】プレミアムカツ丼 (Githubシミュレート)", // 7-9/10
-            standard: "https://placehold.co/450x250/A9A9A9/000?text=【4-6点】並カツ丼 (Githubシミュレート)", // 4-6/10
-            plain: "https://placehold.co/450x250/D2B48C/000?text=【0-3点】惜しいカツ丼 (Githubシミュレート)", // 0-3/10
+            supreme: GITHUB_PAGES_ROOT + "katsudon_supreme.png", // 10/10
+            premium: GITHUB_PAGES_ROOT + "katsudon_premium.png", // 7-9/10
+            standard: GITHUB_PAGES_ROOT + "katsudon_standard.png", // 4-6/10
+            plain: GITHUB_PAGES_ROOT + "katsudon_plain.png", // 0-3/10
         };
         // -----------------------------------------------------
 
@@ -261,15 +247,20 @@
         }
         
         /**
-         * 画像生成AIの呼び出しを削除し、静的画像URLを返す処理に置き換えました。
-         * GitHubの画像URLの代わりにプレースホルダーURLを使用します。
+         * スコアに応じた静的画像をURLを使用して表示します。
          */
         function displayKatsudonImage(gradeKey) {
             const container = document.getElementById('katsudon-image-container');
             const imageUrl = katsudonImages[gradeKey];
             
-            container.innerHTML = `<img src="${imageUrl}" class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" alt="完成したカツ丼の画像">`;
-            container.classList.remove('flex-col', 'flex', 'items-center', 'justify-center'); // 不要なスタイルを削除
+            // onerror属性を追加し、画像が読み込めなかった場合の代替テキストを設定
+            container.innerHTML = `<img src="${imageUrl}" 
+                                       class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" 
+                                       alt="完成したカツ丼の画像"
+                                       onerror="this.onerror=null; this.src='https://placehold.co/450x250/CC0000/fff?text=画像が見つかりません';" 
+                                       style="max-width: 100%; height: auto;">`;
+            
+            container.classList.remove('flex-col', 'flex', 'items-center', 'justify-center'); // 画像がセットされたら中央寄せCSSを解除
         }
 
 
@@ -294,7 +285,7 @@
             // 画像コンテナを初期状態に戻す
             const container = document.getElementById('katsudon-image-container');
             container.innerHTML = `画像を準備中です...`;
-            container.classList.remove('flex-col'); 
+            // 画像ロード前の表示のため、中央寄せのクラスを追加
             container.classList.add('flex', 'items-center', 'justify-center');
 
 
@@ -474,7 +465,7 @@
             } else {
                 // 残念 (0-3/10)
                 title = `次こそ<ruby>頑<rt>がん</rt></ruby><ruby>張<rt>ば</rt></ruby>ろう！<ruby>惜<rt>お</rt></ruby>しいカツ<ruby>丼<rt>どん</rt></ruby> (${score}/${TOTAL_QUESTIONS} 正解)`;
-                description = `**<ruby>諦<rt>あきら</rt></ruby>めないでください！** <ruby>材料<rt>ざいりょう</rt></ruby>のアップグレードがほとんど<ruby>進<rt>すす</rt></rt></ruby>みませんでした。<ruby>次<rt>つぎ</rt></ruby>は<ruby>一<rt>ひと</rt></ruby>つでも<ruby>多<rt>おお</rt></ruby>く<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>して、より<ruby>良<rt>よ</rt></ruby>い<ruby>材料<rt>ざいりょう</rt></ruby>を<ruby>手<rt>て</rt></ruby>に<ruby>入<rt>い</rt></ruby>れましょう。<ruby>再<rt>さい</rt></ruby><ruby>挑<rt>ちょう</rt></ruby><ruby>戦<rt>せん</rt></ruby>を<ruby>応<rt>おう</rt></ruby><ruby>援<rt>えん</rt></ruby>しています！`;
+                description = `**<ruby>諦<rt>あきら</rt></ruby>めないでください！** <ruby>材料<rt>ざいりょう</rt></ruby>のアップグレードがほとんど<ruby>進<rt>すす</rt></ruby>みませんでした。<ruby>次<rt>つぎ</rt></ruby>は<ruby>一<rt>ひと</rt></ruby>つでも<ruby>多<rt>おお</rt></ruby>く<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>して、より<ruby>良<rt>よ</rt></ruby>い<ruby>材料<rt>ざいりょう</rt></ruby>を<ruby>手<rt>て</rt></ruby>に<ruby>入<rt>い</rt></ruby>れましょう。<ruby>再<rt>さい</rt></ruby><ruby>挑<rt>ちょう</rt></ruby><ruby>戦<rt>せん</rt></ruby>を<ruby>応<rt>おう</rt></ruby><ruby>援<rt>えん</rt></ruby>しています！`;
                 gradeKey = 'plain';
                 titleClass = 'text-red-800';
             }
