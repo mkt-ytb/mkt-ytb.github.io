@@ -24,7 +24,7 @@
             height: 20vh;
             background-color: #964b00; /* 茶色 */
             background-image: linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px), 
-                             linear-gradient(180deg, rgba(255,255,255,.1) 1px, transparent 1px);
+                              linear-gradient(180deg, rgba(255,255,255,.1) 1px, transparent 1px);
             background-size: 50px 50px;
             z-index: 0;
             box-shadow: inset 0 8px 16px rgba(0, 0, 0, 0.1);
@@ -45,6 +45,18 @@
         /* ルビのスタイル調整 (読みやすくするため) */
         ruby rt {
             font-size: 0.5em; /* 親文字に対して小さいサイズ */
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #f59e0b; /* Tailwind: amber-500 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -148,7 +160,8 @@
             
             <!-- 完成したカツ丼の画像コンテナ -->
             <div id="katsudon-image-container" class="w-full h-auto rounded-lg shadow-xl mb-6 aspect-video border-4 border-yellow-500 flex items-center justify-center bg-gray-200 text-gray-600 font-semibold text-lg">
-                 <!-- 結果の画像がここに挿入されます -->
+                 <!-- 画像またはローディングインジケータがここに挿入されます -->
+                 画像を生成中です...
             </div>
             
             <button id="restart-button" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-150" onclick="setupQuiz()">
@@ -163,7 +176,11 @@
     </div>
 
     <script>
-        // 全問題データ: 20問 (解説付き) - ルビを適用
+        // AI画像生成用の定数
+        const IMAGEN_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=";
+        const API_KEY = ""; // Canvas環境によって自動的に提供されます
+
+        // 全問題データ: 15問 (解説付き) - ルビを適用 (重複を避けるため元のデータに数問追加しました)
         const allQuizData = [
             { q: "「<ruby>猿<rt>さる</rt></ruby>も<ruby>木<rt>き</rt></ruby>から<ruby>落<rt>お</rt></ruby>ちる」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "どんな<ruby>名<rt>めい</rt></ruby><ruby>人<rt>じん</rt></ruby>でも<ruby>失<rt>しっ</rt></ruby><ruby>敗<rt>ぱい</rt></ruby>することがある。", distractors: ["<ruby>猿<rt>さる</rt></ruby>は<ruby>木<rt>き</rt></ruby>から<ruby>落<rt>お</rt></ruby>ちると<ruby>大<rt>おお</rt></ruby><ruby>怪我<rt>けが</rt></ruby>をする。", "<ruby>猿<rt>さる</rt></ruby>は<ruby>木<rt>き</rt></ruby>の<ruby>上<rt>うえ</rt></ruby>で<ruby>生活<rt>せいかつ</rt></ruby>するのが<ruby>苦<rt>にが</rt></ruby>てだ。"], commentary: "<ruby>木<rt>き</rt></ruby>のぼりが<ruby>得<rt>とく</rt></ruby><ruby>意<rt>い</rt></ruby>な<ruby>猿<rt>さる</rt></ruby>でも<ruby>失<rt>しっ</rt></ruby><ruby>敗<rt>ぱい</rt></ruby>するように、どんなに<ruby>優<rt>すぐ</rt></ruby>れた<ruby>人<rt>ひと</rt></ruby>でも<ruby>間<rt>ま</rt></ruby>ち<ruby>が<rt>が</rt></ruby>いを<ruby>犯<rt>おか</rt></ruby>すことがある、という<ruby>意味<rt>いみ</rt></ruby>です。" },
             { q: "「<ruby>一<rt>いっ</rt></ruby><ruby>石<rt>せき</rt></ruby><ruby>二<rt>に</rt></ruby><ruby>鳥<rt>ちょう</rt></ruby>」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "一つの<ruby>行<rt>こう</rt></ruby><ruby>為<rt>い</rt></ruby>で<ruby>二<rt>ふた</rt></ruby>つの<ruby>利<rt>り</rt></ruby><ruby>益<rt>えき</rt></ruby>を<ruby>得<rt>え</rt></ruby>ること。", distractors: ["<ruby>石<rt>いし</rt></ruby>を<ruby>投<rt>な</rt></ruby>げればすぐに<ruby>鳥<rt>とり</rt></ruby>が<ruby>落<rt>お</rt></ruby>ちてくる。", "<ruby>二<rt>ふた</rt></ruby>つの<ruby>石<rt>いし</rt></ruby>を<ruby>同<rt>どう</rt></ruby><ruby>時<rt>じ</rt></ruby>に<ruby>投<rt>な</rt></ruby>げること。"], commentary: "一つの<ruby>石<rt>いし</rt></ruby>で<ruby>二<rt>に</rt></ruby><ruby>羽<rt>わ</rt></ruby>の<ruby>鳥<rt>とり</rt></ruby>を<ruby>捕<rt>つか</rt></ruby>まえるように、<ruby>一<rt>いち</rt></ruby><ruby>度<rt>ど</rt></ruby>の<ruby>行<rt>こう</rt></ruby><ruby>動<rt>どう</rt></ruby>で<ruby>二<rt>ふた</rt></ruby>つの<ruby>成<rt>せい</rt></ruby><ruby>果<rt>か</rt></ruby>を<ruby>得<rt>え</rt></ruby>ることを<ruby>指<rt>さ</rt></ruby>します。" },
@@ -185,38 +202,45 @@
             { q: "「<ruby>鬼<rt>おに</rt></ruby>に<ruby>金<rt>かな</rt></ruby><ruby>棒<rt>ぼう</rt></ruby>」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>強<rt>つよ</rt></ruby>いものがさらに<ruby>強<rt>つよ</rt></ruby>い<ruby>力<rt>ちから</rt></ruby>を<ruby>得<rt>え</rt></ruby>ること。", distractors: ["<ruby>鬼<rt>おに</rt></ruby>は<ruby>金<rt>かな</rt></ruby><ruby>棒<rt>ぼう</rt></ruby>がないと<ruby>戦<rt>たたか</rt></ruby>えない。", "<ruby>金<rt>かな</rt></ruby><ruby>棒<rt>ぼう</rt></ruby>は<ruby>鬼<rt>おに</rt></ruby>にとってとても<ruby>重<rt>じゅう</rt></ruby><ruby>要<rt>よう</rt></ruby>だ。"], commentary: "ただでさえ<ruby>強<rt>つよ</rt></ruby>い<ruby>鬼<rt>おに</rt></ruby>が、さらに<ruby>強<rt>きょう</rt></ruby><ruby>力<rt>りょく</rt></ruby>な<ruby>武<rt>ぶ</rt></ruby><ruby>器<rt>き</rt></ruby>である<ruby>金<rt>かな</rt></ruby><ruby>棒<rt>ぼう</rt></ruby>を<ruby>持<rt>も</rt></ruby>つことで<ruby>向<rt>む</rt></ruby>かうところ<ruby>敵<rt>てき</rt></ruby>なしになる、という<ruby>例<rt>たと</rt></ruby>えです。" },
             { q: "「<ruby>郷<rt>ごう</rt></ruby>に<ruby>入<rt>い</rt></ruby>っては<ruby>郷<rt>ごう</rt></ruby>に<ruby>従<rt>したが</rt></ruby>え」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>住<rt>す</rt></ruby>む<ruby>場<rt>ば</rt></ruby><ruby>所<rt>しょ</rt></ruby>が<ruby>変<rt>か</rt></ruby>われば、その<ruby>土<rt>と</rt></ruby><ruby>地<rt>ち</rt></ruby>の<ruby>習<rt>しゅう</rt></ruby><ruby>慣<rt>かん</rt></ruby>や<ruby>風<rt>ふう</rt></ruby><ruby>俗<rt>ぞく</rt></ruby>に<ruby>従<rt>したが</rt></ruby>うべきだ。", distractors: ["<ruby>郷<rt>ごう</rt></ruby>に<ruby>入<rt>い</rt></ruby>っても<ruby>自<rt>じ</rt></ruby><ruby>分<rt>ぶん</rt></ruby>の<ruby>流<rt>りゅう</rt></ruby><ruby>儀<rt>ぎ</rt></ruby>を<ruby>貫<rt>つらぬ</rt></ruby>くべきだ。", "<ruby>郷<rt>ごう</rt></ruby>に<ruby>入<rt>い</rt></ruby>ったら<ruby>村<rt>むら</rt></ruby><ruby>人<rt>びと</rt></ruby><ruby>全<rt>ぜん</rt></ruby><ruby>員<rt>いん</rt></ruby>に<ruby>従<rt>したが</rt></ruby>わなければならない。"], commentary: "<ruby>新<rt>あたら</rt></ruby>しい<ruby>環<rt>かん</rt></ruby><ruby>境<rt>きょう</rt></ruby>では、そこのルールや<ruby>慣<rt>かん</rt></ruby><ruby>習<rt>しゅう</rt></ruby>を<ruby>尊<rt>そん</rt></ruby><ruby>重<rt>ちょう</rt></ruby>しなさい、という<ruby>教<rt>きょう</rt></ruby><ruby>訓<rt>くん</rt></ruby>です。" },
             { q: "「<ruby>備<rt>そな</rt></ruby>えあれば<ruby>憂<rt>うれ</rt></ruby>いなし」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>普<rt>ふ</rt></ruby><ruby>段<rt>だん</rt></ruby>から<ruby>準<rt>じゅん</rt></ruby><ruby>備<rt>び</rt></ruby>しておけば、いざという<ruby>時<rt>とき</rt></ruby>も<ruby>心<rt>しん</rt></ruby><ruby>配<rt>ぱい</rt></ruby>ない。", distractors: ["<ruby>備<rt>そな</rt></ruby>えをしてもしなくても<ruby>憂<rt>うれ</rt></ruby>いは<ruby>尽<rt>つ</rt></ruby>きない。", "<ruby>備<rt>そな</rt></ruby>えをすることは<ruby>人<rt>じん</rt></ruby><ruby>生<rt>せい</rt></ruby>の<ruby>憂<rt>うれ</rt></ruby>いである。"], commentary: "<ruby>日<rt>ひ</rt></ruby><ruby>頃<rt>ごろ</rt></ruby>から<ruby>用<rt>よう</rt></ruby><ruby>意<rt>い</rt></ruby>や<ruby>心<rt>こころ</rt></ruby><ruby>構<rt>がま</rt></ruby>えをしておけば、<ruby>突<rt>とっ</rt></ruby><ruby>発<rt>はつ</rt></ruby><ruby>的<rt>てき</rt></ruby>な<ruby>事<rt>じ</rt></ruby><ruby>態<rt>たい</rt></ruby>が<ruby>起<rt>お</rt></ruby>きても<ruby>心<rt>しん</rt></ruby><ruby>配<rt>ぱい</rt></ruby>ごとがない、という<ruby>意味<rt>いみ</rt></ruby>です。" },
+            { q: "「<ruby>案<rt>あん</rt></ruby><ruby>ずるより<rt>より</rt></ruby><ruby>産<rt>う</rt></ruby>むが<ruby>易<rt>やす</rt></ruby>し」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "あれこれ<ruby>心<rt>しん</rt></ruby><ruby>配<rt>ぱい</rt></ruby>するより、<ruby>実<rt>じっ</rt></ruby><ruby>際<rt>さい</rt></ruby>に<ruby>行<rt>おこな</rt></ruby>ってみる<ruby>方<rt>ほう</rt></ruby>が<ruby>案<rt>あん</rt></ruby><ruby>外<rt>がい</rt></ruby><ruby>簡<rt>かん</rt></ruby><ruby>単<rt>たん</rt></ruby>なものだ。", distractors: ["<ruby>物<rt>もの</rt></ruby>を<ruby>作<rt>つく</rt></ruby>るのは<ruby>考<rt>かんが</rt></ruby>えるよりも<ruby>楽<rt>たの</rt></ruby>しい。", "<ruby>子<rt>こ</rt></ruby>を<ruby>産<rt>う</rt></ruby>むのは<ruby>簡<rt>かん</rt></ruby><ruby>単<rt>たん</rt></ruby>だ。"], commentary: "あれこれ<ruby>悩<rt>なや</rt></ruby>むより、<ruby>手<rt>て</rt></ruby>を<ruby>付<rt>つ</rt></ruby>けてみれば<ruby>簡<rt>かん</rt></ruby><ruby>単<rt>たん</rt></ruby>に<ruby>解<rt>かい</rt></ruby><ruby>決<rt>けつ</rt></ruby>する、という<ruby>意味<rt>いみ</rt></ruby>です。" },
+            { q: "「<ruby>類<rt>るい</rt></ruby>は<ruby>友<rt>とも</rt></ruby>を<ruby>呼<rt>よ</rt></ruby>ぶ」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>似<rt>に</rt></ruby>た<ruby>者<rt>もの</rt></ruby><ruby>同<rt>どう</rt></ruby><ruby>士<rt>し</rt></ruby>は<ruby>自<rt>し</rt></ruby><ruby>然<rt>ぜん</rt></ruby>と<ruby>集<rt>あつ</rt></ruby>まって<ruby>仲<rt>なか</rt></ruby><ruby>間<rt>ま</rt></ruby>になるものだ。", distractors: ["<ruby>類<rt>るい</rt></ruby>という<ruby>人<rt>ひと</rt></ruby>は<ruby>友<rt>とも</rt></ruby>だちが<ruby>多<rt>おお</rt></ruby>い。", "<ruby>友<rt>とも</rt></ruby>を<ruby>呼<rt>よ</rt></ruby>ぶには<ruby>自<rt>じ</rt></ruby><ruby>分<rt>ぶん</rt></ruby>から<ruby>類<rt>るい</rt></ruby>を<ruby>作<rt>つく</rt></ruby>る<ruby>必<rt>ひつ</rt></ruby><ruby>要<rt>よう</rt></ruby>がある。"], commentary: "<ruby>気<rt>き</rt></ruby>の<ruby>合<rt>あ</rt></ruby>う<ruby>者<rt>もの</rt></ruby><ruby>同<rt>どう</rt></ruby><ruby>士<rt>し</rt></ruby>が<ruby>集<rt>あつ</rt></ruby>まりやすいことを<ruby>表<rt>あらわ</rt></ruby>します。" },
+            { q: "「<ruby>早<rt>はや</rt></ruby>い<ruby>者<rt>もの</rt></ruby><ruby>勝<rt>が</rt></ruby>ち」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "すぐに<ruby>行<rt>こう</rt></ruby><ruby>動<rt>どう</rt></ruby>した<ruby>者<rt>もの</rt></ruby>が、<ruby>最<rt>さい</rt></ruby><ruby>初<rt>しょ</rt></ruby>に<ruby>目<rt>もく</rt></ruby><ruby>的<rt>てき</rt></ruby>を<ruby>達<rt>たっ</rt></ruby><ruby>成<rt>せい</rt></ruby>して<ruby>利<rt>り</rt></ruby><ruby>益<rt>えき</rt></ruby>を<ruby>得<rt>え</rt></ruby>る。", distractors: ["<ruby>早<rt>はや</rt></ruby>く<ruby>走<rt>はし</rt></ruby>った<ruby>者<rt>もの</rt></ruby>が<ruby>勝<rt>か</rt></ruby>ちである。", "<ruby>何<rt>なに</rt></ruby>かをする<ruby>前<rt>まえ</rt></ruby>に<ruby>必<rt>かなら</rt></ruby>ず<ruby>早<rt>はや</rt></ruby>く<ruby>行<rt>い</rt></ruby>くべきだ。"], commentary: "<ruby>機<rt>き</rt></ruby><ruby>会<rt>かい</rt></ruby>を<ruby>逃<rt>のが</rt></ruby>さず、<ruby>先<rt>さき</rt></ruby>に<ruby>行<rt>こう</rt></ruby><ruby>動<rt>どう</rt></ruby>することの<ruby>重<rt>じゅう</rt></ruby><ruby>要<rt>よう</rt></ruby><ruby>性<rt>せい</rt></ruby>を<ruby>説<rt>と</rt></ruby>いています。" },
+            { q: "「<ruby>壁<rt>かべ</rt></ruby>に<ruby>耳<rt>みみ</rt></ruby>あり、<ruby>障<rt>しょう</rt></ruby><ruby>子<rt>じ</rt></ruby>に<ruby>目<rt>め</rt></ruby>あり」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "どこで<ruby>誰<rt>だれ</rt></ruby>が<ruby>聞<rt>き</rt></ruby>いているか<ruby>見<rt>み</rt></ruby>ているかわからないので、<ruby>秘<rt>ひ</rt></ruby><ruby>密<rt>みつ</rt></ruby>の<ruby>話<rt>はなし</rt></ruby>は<ruby>気<rt>き</rt></ruby>をつけよ。", distractors: ["<ruby>壁<rt>かべ</rt></ruby>には<ruby>耳<rt>みみ</rt></ruby>と<ruby>目<rt>め</rt></ruby>が<ruby>描<rt>えが</rt></ruby>かれている。", "<ruby>壁<rt>かべ</rt></ruby>や<ruby>障<rt>しょう</rt></ruby><ruby>子<rt>じ</rt></ruby>は<ruby>音<rt>おと</rt></ruby>を<ruby>吸<rt>す</rt></ruby>い<ruby>込<rt>こ</rt></ruby>む<ruby>性<rt>せい</rt></ruby><ruby>質<rt>しつ</rt></ruby>がある。"], commentary: "<ruby>隠<rt>かく</rt></ruby>し<ruby>事<rt>ごと</rt></ruby>は<ruby>必<rt>かなら</rt></ruby>ず<ruby>露<rt>ろ</rt></ruby><ruby>顕<rt>けん</rt></ruby>するから、<ruby>言<rt>い</rt></ruby><ruby>動<rt>どう</rt></ruby>には<ruby>注<rt>ちゅう</rt></ruby><ruby>意<rt>い</rt></ruby>すべきだ、という<ruby>教<rt>きょう</rt></ruby><ruby>訓<rt>くん</rt></ruby>です。" },
+            { q: "「<ruby>馬<rt>うま</rt></ruby>の<ruby>耳<rt>みみ</rt></ruby>に<ruby>念<rt>ねん</rt></ruby><ruby>仏<rt>ぶつ</rt></ruby>」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "いくら<ruby>意<rt>い</rt></ruby><ruby>見<rt>けん</rt></ruby>しても、<ruby>聞<rt>き</rt></ruby>き<ruby>入<rt>い</rt></ruby>れる<ruby>素<rt>そ</rt></ruby><ruby>振<rt>ぶり</rt></ruby>のないこと。", distractors: ["<ruby>馬<rt>うま</rt></ruby>は<ruby>念<rt>ねん</rt></ruby><ruby>仏<rt>ぶつ</rt></ruby>を<ruby>聞<rt>き</rt></ruby>くと<ruby>安<rt>やす</rt></ruby>らぐ。", "<ruby>念<rt>ねん</rt></ruby><ruby>仏<rt>ぶつ</rt></ruby>は<ruby>馬<rt>うま</rt></ruby>の<ruby>耳<rt>みみ</rt></ruby>に<ruby>入<rt>い</rt></ruby>れてはいけない。"], commentary: "<ruby>馬<rt>うま</rt></ruby>に<ruby>念<rt>ねん</rt></ruby><ruby>仏<rt>ぶつ</rt></ruby>を<ruby>聞<rt>き</rt></ruby>かせても<ruby>何<rt>なん</rt></ruby>の<ruby>効<rt>こう</rt></ruby><ruby>果<rt>か</rt></ruby>もないように、<ruby>言<rt>い</rt></ruby>っても<ruby>無<rt>む</rt></ruby><ruby>駄<rt>だ</rt></ruby>なことの<ruby>例<rt>たと</rt></ruby>えです。" },
+            { q: "「<ruby>鯖<rt>さば</rt></ruby>の<ruby>読<rt>よ</rt></ruby>み」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>数<rt>かず</rt></ruby>を<ruby>数<rt>かぞ</rt></ruby>える<ruby>際<rt>さい</rt></ruby>に、<ruby>故<rt>こ</rt></ruby><ruby>意<rt>い</rt></ruby>に<ruby>多<rt>おお</rt></ruby>めに<ruby>言<rt>い</rt></ruby>ったり<ruby>間<rt>ま</rt></ruby>ち<ruby>が<rt>が</rt></ruby>えること。", distractors: ["<ruby>鯖<rt>さば</rt></ruby>の<ruby>本<rt>ほん</rt></ruby>を<ruby>読<rt>よ</rt></ruby>むこと。", "<ruby>鯖<rt>さば</rt></ruby>の<ruby>大<rt>おお</rt></ruby>きさを<ruby>読<rt>よ</rt></ruby>み<ruby>取<rt>と</rt></ruby>ること。"], commentary: "<ruby>昔<rt>むかし</rt></ruby>、<ruby>鯖<rt>さば</rt></ruby>は<ruby>腐<rt>くさ</rt></ruby>りやすいため、<ruby>数<rt>かぞ</rt></ruby>え<ruby>方<rt>かた</rt></ruby>が<ruby>雑<rt>ざつ</rt></ruby>になりがちだったことから、<ruby>数<rt>かぞ</rt></ruby>え<ruby>間<rt>ま</rt></ruby>ち<ruby>が<rt>が</rt></ruby>いを<ruby>指<rt>さ</rt></ruby>します。" },
+            { q: "「<ruby>渡<rt>わた</rt></ruby>りに<ruby>船<rt>ふね</rt></ruby>」の<ruby>正<rt>ただ</rt></ruby>しい<ruby>意味<rt>いみ</rt></ruby>は？", correct: "<ruby>困<rt>こま</rt></ruby>っているときに、<ruby>都<rt>つ</rt></ruby><ruby>合<rt>ごう</rt></ruby>の<ruby>良<rt>よ</rt></ruby>い<ruby>助<rt>たす</rt></ruby>けが<ruby>現<rt>あらわ</rt></ruby>れること。", distractors: ["<ruby>船<rt>ふね</rt></ruby>で<ruby>川<rt>かわ</rt></ruby>を<ruby>渡<rt>わた</rt></ruby>ること。", "<ruby>渡<rt>わた</rt></ruby>り<ruby>鳥<rt>どり</rt></ruby>のように<ruby>旅<rt>たび</rt></ruby>をすること。"], commentary: "<ruby>川<rt>かわ</rt></ruby>を<ruby>渡<rt>わた</rt></ruby>りたいときに<ruby>船<rt>ふね</rt></ruby>が<ruby>来<rt>き</rt></ruby>るように、<ruby>願<rt>ねが</rt></ruby>ってもない<ruby>助<rt>たす</rt></ruby>け<ruby>舟<rt>ぶね</rt></ruby>が<ruby>現<rt>あらわ</rt></ruby>れる、という<ruby>意味<rt>いみ</rt></ruby>です。" }
         ];
 
         // 10種類の材料の情報 (初期状態とグレードアップ後)
         const materials = [
-            // { score: 1 }
+            // score 1
             { id: 'mat-katsu', initial: { icon: '🐷', text: '豚肉' }, upgraded: { icon: '👑', text: '特選ロース' } },
-            // { score: 2 }
+            // score 2
             { id: 'mat-egg', initial: { icon: '🥚', text: '卵' }, upgraded: { icon: '🌟', text: '黄金とろ卵' } },
-            // { score: 3 }
+            // score 3
             { id: 'mat-rice', initial: { icon: '🍚', text: 'ご飯' }, upgraded: { icon: '🌾', text: '特選コシヒカリ' } },
-            // { score: 4 }
+            // score 4
             { id: 'mat-onion', initial: { icon: '🧅', text: '玉ねぎ' }, upgraded: { icon: '💎', text: '淡路産玉ねぎ' } },
-            // { score: 5 }
+            // score 5
             { id: 'mat-mitsuba', initial: { icon: '🌿', text: '三つ葉' }, upgraded: { icon: '🍃', text: '香り三つ葉' } },
-            // { score: 6 }
+            // score 6
             { id: 'mat-panko', initial: { icon: '🍞', text: 'パン粉' }, upgraded: { icon: '✨', text: '極上生パン粉' } },
-            // { score: 7 }
+            // score 7
             { id: 'mat-oil', initial: { icon: '🏺', text: '油' }, upgraded: { icon: '☀️', text: '最高級米油' } },
-            // { score: 8 }
+            // score 8
             { id: 'mat-soy', initial: { icon: '🥢', text: '醤油' }, upgraded: { icon: '🔥', text: '熟成醤油' } },
-            // { score: 9 }
+            // score 9
             { id: 'mat-sugar', initial: { icon: '🍬', text: '砂糖' }, upgraded: { icon: '🍯', text: '本みりん' } },
-            // { score: 10 }
+            // score 10
             { id: 'mat-bowl', initial: { icon: '🥣', text: '器' }, upgraded: { icon: '🍶', text: '高級漆器' } },
         ];
-
-        // スコアに応じた静的画像URL (プレースホルダーを使用)
-        const katsudonImages = {
-            supreme: "https://placehold.co/450x250/FFD700/000?text=【神業】至高のカツ丼", // 10/10
-            premium: "https://placehold.co/450x250/C0C0C0/000?text=【特選】プレミアムカツ丼", // 7-9/10
-            standard: "https://placehold.co/450x250/A9A9A9/000?text=【並】標準カツ丼", // 4-6/10
-            plain: "https://placehold.co/450x250/D2B48C/000?text=【残念】次こそ豪華に", // 0-3/10
+        
+        // スコアに応じた画像生成プロンプト (英語でAIに指示)
+        const katsudonPrompts = {
+            supreme: "Japanese katsudon with extremely thick, crispy, golden pork cutlet (tonkatsu). The egg is perfectly half-cooked and glistening yellow, topped with vibrant green mitsuba. Served in a glossy black lacquered bowl. Hyper-realistic photography, high-quality, studio lighting.", // 10/10
+            premium: "Premium Japanese katsudon. Large, golden-brown pork cutlet served on rice, covered with savory soft-boiled eggs and sweet onions. Served in a standard ceramic bowl. Focus on deliciousness, high-quality image.", // 7-9/10
+            standard: "Standard Japanese katsudon (pork cutlet bowl) in a restaurant. Average sized cutlet, cooked egg, simple presentation. Appetizing and neat, natural light.", // 4-6/10
+            plain: "A slightly plain Japanese katsudon. The pork cutlet is thin and small. The egg is slightly overcooked and the serving portion is modest. Simple bowl, realistic, slightly disappointing, close-up shot.", // 0-3/10
         };
 
 
@@ -236,6 +260,80 @@
             }
             return array;
         }
+        
+        /**
+         * 画像生成AIを呼び出し、スコアに応じたカツ丼画像を生成します。
+         * @param {string} prompt - 画像生成のためのプロンプト
+         */
+        async function generateKatsudonImage(prompt) {
+            const container = document.getElementById('katsudon-image-container');
+            
+            // ローディング表示
+            container.innerHTML = `
+                <div class="loading-spinner"></div>
+                <p class="ml-4">豪華なカツ丼画像をAIが生成中です...</p>
+            `;
+            container.classList.remove('bg-gray-200');
+            container.classList.add('flex-col'); // スピナーとテキストを縦並びにするため
+
+            const payload = {
+                instances: [{ prompt: prompt }],
+                parameters: { 
+                    "sampleCount": 1,
+                    "aspectRatio": "16:9", // カツ丼の見た目を良くするためワイドに
+                } 
+            };
+            
+            let imageUrl = '';
+            const maxRetries = 5;
+            let currentDelay = 1000;
+
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(IMAGEN_API_URL + API_KEY, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    
+                    const base64Data = result.predictions?.[0]?.bytesBase64Encoded;
+                    if (base64Data) {
+                        imageUrl = `data:image/png;base64,${base64Data}`;
+                        break; // 成功
+                    } else {
+                        throw new Error("No image data received from API.");
+                    }
+
+                } catch (error) {
+                    console.error(`Attempt ${i + 1} failed: `, error);
+                    if (i < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, currentDelay));
+                        currentDelay *= 2; // Exponential backoff
+                    } else {
+                        // 最終的なエラー処理
+                        container.innerHTML = `
+                            <p class="text-red-600">画像の生成に失敗しました。</p>
+                            <p class="text-sm">プロンプト: ${prompt}</p>
+                        `;
+                        return;
+                    }
+                }
+            }
+
+            // 画像が生成されたら表示を更新
+            if (imageUrl) {
+                container.innerHTML = `<img src="${imageUrl}" class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" alt="完成したカツ丼の画像">`;
+            }
+            container.classList.add('bg-gray-200');
+            container.classList.remove('flex-col');
+        }
+
 
         /**
          * クイズを初期設定し、最初の問題を表示します。
@@ -367,7 +465,7 @@
 
             // 最終問題ならボタンのテキストを変更
             if (currentQuestionIndex === quizData.length - 1) {
-                document.getElementById('next-button').textContent = '結果を見る';
+                document.getElementById('next-button').textContent = '結果を見る（カツ丼生成！）';
             }
         }
 
@@ -397,7 +495,7 @@
         }
         
         /**
-         * 最終スコアに基づいて完成したカツ丼を表示します。（静的画像を使用）
+         * 最終スコアに基づいて完成したカツ丼を表示し、画像生成を呼び出します。
          */
         function showResult() { 
             // UIを切り替え
@@ -406,35 +504,34 @@
             
             const finalMessage = document.getElementById('final-message');
             const gradeExplanation = document.getElementById('grade-explanation');
-            const katsudonImageContainer = document.getElementById('katsudon-image-container');
-
-            let title, description, imageUrl, titleClass; 
+            
+            let title, description, prompt, titleClass; 
 
             if (score === TOTAL_QUESTIONS) {
                 // 満点 (10/10)
                 title = `神業達成！至高の豪華カツ丼！`;
                 description = `**おめでとうございます！** 全問<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>で10<ruby>種類<rt>しゅるい</rt></ruby>の<ruby>材料<rt>ざいりょう</rt></ruby>すべてが<ruby>最高<rt>さいこう</rt></ruby><ruby>級<rt>きゅう</rt></ruby><ruby>品<rt>ひん</rt></ruby>にアップグレードされました。<ruby>この世<rt>よ</rt></ruby>の<ruby>贅<rt>ぜい</rt></ruby>を<ruby>尽<rt>つ</rt></ruby>くした<ruby>究<rt>きゅう</rt></ruby><ruby>極<rt>きょく</rt></ruby>の<ruby>一<rt>いっ</rt></ruby><ruby>杯<rt>ぱい</rt></ruby>が、あなたの<ruby>努<rt>ど</rt></ruby><ruby>力<rt>りょく</rt></ruby>の<ruby>結<rt>けっ</rt></ruby><ruby>晶<rt>しょう</rt></ruby>です。`;
-                imageUrl = katsudonImages.supreme;
+                prompt = katsudonPrompts.supreme;
                 titleClass = 'text-yellow-600';
                 
             } else if (score >= 7) {
                 // 上 (7-9/10)
                 title = `素晴らしい！特選カツ丼が完成！ (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>見事<rt>みごと</rt></ruby>な<ruby>成績<rt>せいせき</rt></ruby>です！** <ruby>主要<rt>しゅよう</rt></ruby>な<ruby>材料<rt>ざいりょう</rt></ruby>のほとんどが<ruby>豪華<rt>ごうか</rt></ruby>な<ruby>品<rt>ひん</rt></ruby>にグレードアップしました。<ruby>惜<rt>お</rt></ruby>しくも<ruby>満<rt>まん</rt></ruby><ruby>点<rt>てん</rt></ruby>には<ruby>届<rt>とど</rt></ruby>きませんでしたが、<ruby>文句<rt>もんく</rt></ruby>なしに<ruby>美<rt>おい</rt></ruby>しいプレミアムなカツ<ruby>丼<rt>どん</rt></ruby>です。`;
-                imageUrl = katsudonImages.premium;
+                prompt = katsudonPrompts.premium;
                 titleClass = 'text-gray-700';
 
             } else if (score >= 4) {
                 // 並 (4-6/10)
                 title = `よくできました！並カツ丼が完成。 (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>頑<rt>がん</rt></ruby><ruby>張<rt>ば</rt></ruby>りましたね！** <ruby>半<rt>はん</rt></ruby><ruby>分<rt>ぶん</rt></ruby><ruby>程<rt>てい</rt></ruby><ruby>度<rt>ど</rt></ruby>の<ruby>材料<rt>ざいりょう</rt></ruby>がグレードアップし、<ruby>標準<rt>ひょうじゅん</rt></ruby><ruby>以上<rt>いじょう</rt></ruby>の<ruby>美<rt>おい</rt></ruby>しいカツ<ruby>丼<rt>どん</rt></ruby>が<ruby>完成<rt>かんせい</rt></ruby>しました。<ruby>豪華<rt>ごうか</rt></ruby>カツ<ruby>丼<rt>どん</rt></ruby>には<ruby>届<rt>とど</rt></ruby>きませんでしたが、この<ruby>一<rt>いっ</rt></ruby><ruby>歩<rt>ぽ</rt></ruby>が<ruby>次<rt>つぎ</rt></ruby>につながります！`;
-                imageUrl = katsudonImages.standard;
+                prompt = katsudonPrompts.standard;
                 titleClass = 'text-red-600';
             } else {
                 // 残念 (0-3/10)
                 title = `次こそ<ruby>頑<rt>がん</rt></ruby><ruby>張<rt>ば</rt></ruby>ろう！<ruby>惜<rt>お</rt></ruby>しいカツ<ruby>丼<rt>どん</rt></ruby> (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>諦<rt>あきら</rt></ruby>めないでください！** <ruby>材料<rt>ざいりょう</rt></ruby>のアップグレードがほとんど<ruby>進<rt>すす</rt></ruby>みませんでした。<ruby>次<rt>つぎ</rt></ruby>は<ruby>一<rt>ひと</rt></ruby>つでも<ruby>多<rt>おお</rt></ruby>く<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>して、より<ruby>良<rt>よ</rt></ruby>い<ruby>材料<rt>ざいりょう</rt></ruby>を<ruby>手<rt>て</rt></ruby>に<ruby>入<rt>い</rt></ruby>れましょう。<ruby>再<rt>さい</rt></ruby><ruby>挑<rt>ちょう</rt></ruby><ruby>戦<rt>せん</rt></ruby>を<ruby>応<rt>おう</rt></ruby><ruby>援<rt>えん</rt></ruby>しています！`;
-                imageUrl = katsudonImages.plain;
+                prompt = katsudonPrompts.plain;
                 titleClass = 'text-red-800';
             }
 
@@ -442,8 +539,8 @@
             finalMessage.className = `text-2xl font-extrabold mb-4 ${titleClass}`;
             gradeExplanation.innerHTML = description;
 
-            // 静的画像URLを挿入
-            katsudonImageContainer.innerHTML = `<img src="${imageUrl}" class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" alt="完成したカツ丼の画像">`;
+            // スコアに応じた画像生成を呼び出す
+            generateKatsudonImage(prompt);
         }
 
 
