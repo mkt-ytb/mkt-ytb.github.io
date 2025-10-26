@@ -148,7 +148,7 @@
             
             <!-- 完成したカツ丼の画像コンテナ -->
             <div id="katsudon-image-container" class="w-full h-auto rounded-lg shadow-xl mb-6 aspect-video border-4 border-yellow-500 flex items-center justify-center bg-gray-200 text-gray-600 font-semibold text-lg">
-                 <span id="initial-message">結果を待っています...</span>
+                 <!-- 結果の画像がここに挿入されます -->
             </div>
             
             <button id="restart-button" class="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition duration-150" onclick="setupQuiz()">
@@ -211,6 +211,15 @@
             { id: 'mat-bowl', initial: { icon: '🥣', text: '器' }, upgraded: { icon: '🍶', text: '高級漆器' } },
         ];
 
+        // スコアに応じた静的画像URL (プレースホルダーを使用)
+        const katsudonImages = {
+            supreme: "https://placehold.co/450x250/FFD700/000?text=【神業】至高のカツ丼", // 10/10
+            premium: "https://placehold.co/450x250/C0C0C0/000?text=【特選】プレミアムカツ丼", // 7-9/10
+            standard: "https://placehold.co/450x250/A9A9A9/000?text=【並】標準カツ丼", // 4-6/10
+            plain: "https://placehold.co/450x250/D2B48C/000?text=【残念】次こそ豪華に", // 0-3/10
+        };
+
+
         let quizData = []; // 実際に使う10問を格納する配列
         const TOTAL_QUESTIONS = 10; // 出題数
 
@@ -245,7 +254,7 @@
             document.getElementById('explanation-area').classList.add('hidden'); // 解説エリアを非表示に
             document.getElementById('next-button').textContent = '次の問題へ';
             document.getElementById('next-button').disabled = true;
-            document.getElementById('katsudon-image-container').innerHTML = `<span id="initial-message">結果を待っています...</span>`;
+            document.getElementById('katsudon-image-container').innerHTML = ``; // 画像をリセット
 
             // 材料スロットのリセット
             materials.forEach(mat => {
@@ -312,8 +321,8 @@
          * @param {number} selectedAnswer - ユーザーが選択した答えの番号 (1, 2, または 3)
          */
         function checkAnswer(selectedAnswer) {
-            // すでに回答済みでないかチェック
-            if (document.getElementById('next-button').disabled === false) return;
+            // すでに回答済みでないかチェック (次のボタンが無効化されている場合のみ処理)
+            if (!document.getElementById('next-button').disabled) return; 
             
             const resultMessage = document.getElementById('result-message');
             const explanationArea = document.getElementById('explanation-area');
@@ -386,63 +395,11 @@
                 p.textContent = materialToUpdate.upgraded.text;
             }
         }
-
-        /**
-         * 画像生成AIを呼び出し、Base64画像をコンテナに挿入します。
-         */
-        async function generateKatsudonImage(prompt, containerElement) {
-            const apiKey = ""; // APIキーはシステムにより提供されます
-            // 画像生成モデルのAPIエンドポイント
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
-
-            const payload = {
-                instances: [{ prompt: prompt }],
-                parameters: { "sampleCount": 1 }
-            };
-
-            const MAX_RETRIES = 5;
-            for (let i = 0; i < MAX_RETRIES; i++) {
-                try {
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-
-                    const result = await response.json();
-
-                    if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
-                        const base64Data = result.predictions[0].bytesBase64Encoded;
-                        const imageUrl = `data:image/png;base64,${base64Data}`;
-
-                        // 成功したら<img>タグを挿入
-                        containerElement.innerHTML = `<img src="${imageUrl}" class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" alt="完成したカツ丼の画像">`;
-                        return; // 成功
-                    } else {
-                        throw new Error("画像データがレスポンスに含まれていません。");
-                    }
-                } catch (error) {
-                    console.error(`画像生成失敗 (リトライ ${i + 1}/${MAX_RETRIES}):`, error);
-                    if (i < MAX_RETRIES - 1) {
-                        // 指数関数的バックオフ
-                        const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    } else {
-                        // 最終的に失敗した場合
-                        containerElement.innerHTML = `<div class="p-8 text-red-600">画像を生成できませんでした。ネットワーク接続を確認してください。</div>`;
-                    }
-                }
-            }
-        }
         
         /**
-         * 最終スコアに基づいて完成したカツ丼を表示します。
+         * 最終スコアに基づいて完成したカツ丼を表示します。（静的画像を使用）
          */
-        async function showResult() { 
+        function showResult() { 
             // UIを切り替え
             document.getElementById('quiz-area').classList.add('hidden');
             document.getElementById('final-result-area').classList.remove('hidden');
@@ -451,44 +408,42 @@
             const gradeExplanation = document.getElementById('grade-explanation');
             const katsudonImageContainer = document.getElementById('katsudon-image-container');
 
-            let title, description, prompt; 
-
-            // ローディング表示
-            katsudonImageContainer.innerHTML = `<div class="p-8"><div class="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-600 mx-auto mb-2"></div><span id="loading-text">AIがカツ丼を調理中...少々お待ちください！</span></div>`;
+            let title, description, imageUrl, titleClass; 
 
             if (score === TOTAL_QUESTIONS) {
                 // 満点 (10/10)
                 title = `神業達成！至高の豪華カツ丼！`;
-                description = `**おめでとうございます！** 全問<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>で10<ruby>種類<rt>しゅるい</rt></ruby>の<ruby>材料<rt>ざいりょう</rt></ruby>すべてが<ruby>最高<rt>さいこう</rt></ruby><ruby>級<rt>きゅう</rt></ruby><ruby>品<rt>ひん</rt></ruby>にアップグレードされました。この<ruby>世<rt>よ</rt></ruby>の<ruby>贅<rt>ぜい</rt></ruby>を<ruby>尽<rt>つ</rt></ruby>くした<ruby>究<rt>きゅう</rt></ruby><ruby>極<rt>きょく</rt></ruby>の<ruby>一<rt>いっ</rt></ruby><ruby>杯<rt>ぱい</rt></ruby>が、あなたの<ruby>努<rt>ど</rt></ruby><ruby>力<rt>りょく</rt></ruby>の<ruby>結<rt>けっ</rt></ruby><ruby>晶<rt>しょう</rt></ruby>です。<ruby>最高<rt>さいこう</rt></ruby>の<ruby>味<rt>あじ</rt></ruby>を<ruby>堪<rt>たん</rt></ruby><ruby>能<rt>のう</rt></ruby>してください！`;
-                prompt = "A hyper-realistic, mouth-watering, extremely luxurious katsudon, thick golden fried pork cutlet, perfectly cooked, runny golden egg, shiny green mitsuba, glistening sauce, on a beautiful lacquer bowl, exquisite Japanese cuisine, soft studio lighting, professional food photography, high resolution, detailed, cinematic. Japanese style, on a wooden table, in a traditional Japanese setting.";
-                finalMessage.className = 'text-2xl font-extrabold mb-4 text-yellow-600';
+                description = `**おめでとうございます！** 全問<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>で10<ruby>種類<rt>しゅるい</rt></ruby>の<ruby>材料<rt>ざいりょう</rt></ruby>すべてが<ruby>最高<rt>さいこう</rt></ruby><ruby>級<rt>きゅう</rt></ruby><ruby>品<rt>ひん</rt></ruby>にアップグレードされました。<ruby>この世<rt>よ</rt></ruby>の<ruby>贅<rt>ぜい</rt></ruby>を<ruby>尽<rt>つ</rt></ruby>くした<ruby>究<rt>きゅう</rt></ruby><ruby>極<rt>きょく</rt></ruby>の<ruby>一<rt>いっ</rt></ruby><ruby>杯<rt>ぱい</rt></ruby>が、あなたの<ruby>努<rt>ど</rt></ruby><ruby>力<rt>りょく</rt></ruby>の<ruby>結<rt>けっ</rt></ruby><ruby>晶<rt>しょう</rt></ruby>です。`;
+                imageUrl = katsudonImages.supreme;
+                titleClass = 'text-yellow-600';
                 
             } else if (score >= 7) {
                 // 上 (7-9/10)
                 title = `素晴らしい！特選カツ丼が完成！ (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>見事<rt>みごと</rt></ruby>な<ruby>成績<rt>せいせき</rt></ruby>です！** <ruby>主要<rt>しゅよう</rt></ruby>な<ruby>材料<rt>ざいりょう</rt></ruby>のほとんどが<ruby>豪華<rt>ごうか</rt></ruby>な<ruby>品<rt>ひん</rt></ruby>にグレードアップしました。<ruby>惜<rt>お</rt></ruby>しくも<ruby>満<rt>まん</rt></ruby><ruby>点<rt>てん</rt></ruby>には<ruby>届<rt>とど</rt></ruby>きませんでしたが、<ruby>文句<rt>もんく</rt></ruby>なしに<ruby>美<rt>おい</rt></ruby>しいプレミアムなカツ<ruby>丼<rt>どん</rt></ruby>です。`;
-                prompt = "A delicious looking katsudon, golden brown fried pork cutlet, soft egg, green garnish, steaming rice, a standard but very appetizing Japanese dish, warm lighting, food photography, served in a ceramic bowl.";
-                finalMessage.className = 'text-2xl font-extrabold mb-4 text-gray-700';
+                imageUrl = katsudonImages.premium;
+                titleClass = 'text-gray-700';
 
             } else if (score >= 4) {
                 // 並 (4-6/10)
                 title = `よくできました！並カツ丼が完成。 (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>頑<rt>がん</rt></ruby><ruby>張<rt>ば</rt></ruby>りましたね！** <ruby>半<rt>はん</rt></ruby><ruby>分<rt>ぶん</rt></ruby><ruby>程<rt>てい</rt></ruby><ruby>度<rt>ど</rt></ruby>の<ruby>材料<rt>ざいりょう</rt></ruby>がグレードアップし、<ruby>標準<rt>ひょうじゅん</rt></ruby><ruby>以上<rt>いじょう</rt></ruby>の<ruby>美<rt>おい</rt></ruby>しいカツ<ruby>丼<rt>どん</rt></ruby>が<ruby>完成<rt>かんせい</rt></ruby>しました。<ruby>豪華<rt>ごうか</rt></ruby>カツ<ruby>丼<rt>どん</rt></ruby>には<ruby>届<rt>とど</rt></ruby>きませんでしたが、この<ruby>一<rt>いっ</rt></ruby><ruby>歩<rt>ぽ</rt></ruby>が<ruby>次<rt>つぎ</rt></ruby>につながります！`;
-                prompt = "A simple katsudon, decent fried pork cutlet, egg, rice, a basic Japanese meal, home cooking style, natural lighting, served in a plain bowl, viewed from above.";
-                finalMessage.className = 'text-2xl font-extrabold mb-4 text-red-600';
+                imageUrl = katsudonImages.standard;
+                titleClass = 'text-red-600';
             } else {
                 // 残念 (0-3/10)
                 title = `次こそ<ruby>頑<rt>がん</rt></ruby><ruby>張<rt>ば</rt></ruby>ろう！<ruby>惜<rt>お</rt></ruby>しいカツ<ruby>丼<rt>どん</rt></ruby> (${score}/${TOTAL_QUESTIONS} 正解)`;
                 description = `**<ruby>諦<rt>あきら</rt></ruby>めないでください！** <ruby>材料<rt>ざいりょう</rt></ruby>のアップグレードがほとんど<ruby>進<rt>すす</rt></ruby>みませんでした。<ruby>次<rt>つぎ</rt></ruby>は<ruby>一<rt>ひと</rt></ruby>つでも<ruby>多<rt>おお</rt></ruby>く<ruby>正<rt>せい</rt></ruby><ruby>解<rt>かい</rt></ruby>して、より<ruby>良<rt>よ</rt></ruby>い<ruby>材料<rt>ざいりょう</rt></ruby>を<ruby>手<rt>て</rt></ruby>に<ruby>入<rt>い</rt></ruby>れましょう。<ruby>再<rt>さい</rt></ruby><ruby>挑<rt>ちょう</rt></ruby><ruby>戦<rt>せん</rt></ruby>を<ruby>応<rt>おう</rt></ruby><ruby>援<rt>えん</rt></ruby>しています！`;
-                prompt = "A very plain bowl of rice with minimal, thin toppings, maybe a small piece of cutlet and some egg, looks a bit sad and sparse, representing a lack of ingredients, dim lighting, high contrast, low quality presentation, side view.";
-                finalMessage.className = 'text-2xl font-extrabold mb-4 text-red-800';
+                imageUrl = katsudonImages.plain;
+                titleClass = 'text-red-800';
             }
 
             finalMessage.innerHTML = title;
+            finalMessage.className = `text-2xl font-extrabold mb-4 ${titleClass}`;
             gradeExplanation.innerHTML = description;
 
-            // 画像生成関数を呼び出し、結果を待つ
-            await generateKatsudonImage(prompt, katsudonImageContainer);
+            // 静的画像URLを挿入
+            katsudonImageContainer.innerHTML = `<img src="${imageUrl}" class="w-full h-auto rounded-lg shadow-xl object-cover aspect-video" alt="完成したカツ丼の画像">`;
         }
 
 
